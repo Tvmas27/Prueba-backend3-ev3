@@ -4,3 +4,5 @@ asgiref
 sqlparse
 tzdata
 requests
+djangorestframework-simplejwt
+django-cors-headers
