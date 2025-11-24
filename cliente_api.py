@@ -1,102 +1,104 @@
-# cliente_compacto.py
+# cliente_api.py
 import requests
 
-def registrar_usuario():
-    print("\n📝 REGISTRAR USUARIO")
-    username = input("Usuario: ")
-    password = input("Contraseña: ")
+class ClienteAPI:
+    def __init__(self, base_url="http://localhost:8000"):
+        self.base_url = base_url
+        self.token = None
     
-    try:
-        resp = requests.post("http://localhost:8000/api/auth/register/",
-                           json={"username": username, "password": password, "password_confirm": password})
-        if resp.status_code == 201:
-            print("✅ Usuario creado!")
-            return resp.json()['access']
+    def login(self, usuario="usuario_prueba", clave="password123"):
+        """Login simple"""
+        datos = {"username": usuario, "password": clave}
+        try:
+            response = requests.post(f"{self.base_url}/api/auth/login/", json=datos)
+            if response.status_code == 200:
+                self.token = response.json()['access']
+                print("✅ Login exitoso")
+                return True
+            else:
+                print("❌ Login falló")
+                return False
+        except:
+            print("❌ Servidor no disponible")
+            return False
+    
+    def registrar(self, usuario="usuario_prueba", email="prueba@test.com", clave="password123"):
+        """Registro simple"""
+        datos = {
+            "username": usuario, 
+            "email": email, 
+            "password": clave, 
+            "password_confirm": clave
+        }
+        response = requests.post(f"{self.base_url}/api/auth/register/", json=datos)
+        if response.status_code == 201:
+            print("✅ Usuario registrado")
+            return True
         else:
-            print("❌ Error:", resp.text)
-    except:
-        print("❌ Error de conexión")
-
-def iniciar_sesion():
-    print("\n🔐 INICIAR SESIÓN")
-    username = input("Usuario: ")
-    password = input("Contraseña: ")
+            print("⚠️ Usuario ya existe o error")
+            return False
     
-    try:
-        resp = requests.post("http://localhost:8000/api/auth/login/",
-                           json={"username": username, "password": password})
-        if resp.status_code == 200:
-            print("✅ Login exitoso!")
-            return resp.json()['access']
+    def obtener_productos(self):
+        """Obtener productos - corregido para manejar lista directa"""
+        if not self.token:
+            print("❌ Necesitas login primero")
+            return []
+        
+        headers = {'Authorization': f'Bearer {self.token}'}
+        response = requests.get(f"{self.base_url}/api/productos/", headers=headers)
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            # Manejar tanto lista directa como objeto con 'results'
+            if isinstance(data, list):
+                productos = data
+            else:
+                productos = data.get('results', [])
+            
+            print(f"📦 {len(productos)} productos encontrados")
+            return productos
         else:
-            print("❌ Credenciales incorrectas")
-    except:
-        print("❌ Error de conexión")
-
-def main():
-    token = None
+            print(f"❌ Error: {response.status_code}")
+            return []
     
-    while not token:
-        print("\n🚀 CLIENTE JWT")
-        print("1. Iniciar sesión")
-        print("2. Registrar usuario")
-        opcion = input("Opción: ")
+    def crear_producto(self, nombre, precio, stock=0):
+        """Crear producto simple"""
+        if not self.token:
+            print("❌ Necesitas login primero")
+            return False
         
-        if opcion == "1":
-            token = iniciar_sesion()
-        elif opcion == "2":
-            token = registrar_usuario()
-    
-    # Menú principal
-    while True:
-        print("\n🏪 MENÚ")
-        print("1. Ver productos")
-        print("2. Crear producto")
-        print("3. Editar producto")
-        print("4. Eliminar producto")
-        print("5. Salir")
-        opcion = input("Opción: ")
+        headers = {'Authorization': f'Bearer {self.token}'}
+        datos = {
+            "nombre": nombre,
+            "precio": precio,
+            "stock": stock,
+            "disponible": True
+        }
         
-        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.post(f"{self.base_url}/api/productos/", json=datos, headers=headers)
         
-        if opcion == "1":
-            resp = requests.get("http://localhost:8000/api/productos/", headers=headers)
-            if resp.status_code == 200:
-                for p in resp.json():
-                    print(f" {p['id']}: {p['nombre']} - ${p['precio']}")
-        
-        elif opcion == "2":
-            nombre = input("Nombre: ")
-            precio = input("Precio: ")
-            stock = input("Stock: ")
-            
-            resp = requests.post("http://localhost:8000/api/productos/", 
-                               json={"nombre": nombre, "precio": precio, "stock": stock},
-                               headers=headers)
-            if resp.status_code == 201:
-                print("✅ Producto creado!")
-        
-        elif opcion == "3":
-            id_producto = input("ID del producto a editar: ")
-            nuevo_nombre = input("Nuevo nombre: ")
-            
-            resp = requests.patch(f"http://localhost:8000/api/productos/{id_producto}/", 
-                                json={"nombre": nuevo_nombre},
-                                headers=headers)
-            if resp.status_code == 200:
-                print("✅ Producto editado!")
-        
-        elif opcion == "4":
-            id_producto = input("ID del producto a eliminar: ")
-            
-            resp = requests.delete(f"http://localhost:8000/api/productos/{id_producto}/", 
-                                 headers=headers)
-            if resp.status_code == 204:
-                print("✅ Producto eliminado!")
-        
-        elif opcion == "5":
-            print("👋 Adiós!")
-            break
+        if response.status_code == 201:
+            print(f"✅ Producto '{nombre}' creado")
+            return True
+        else:
+            print(f"❌ Error creando producto: {response.text}")
+            return False
 
+# Uso rápido
 if __name__ == "__main__":
-    main()
+    cliente = ClienteAPI()
+    
+    # 1. Registrar usuario (solo primera vez)
+    cliente.registrar()
+    
+    # 2. Login
+    if cliente.login():
+        # 3. Crear productos
+        cliente.crear_producto("Laptop", 1000, 5)
+        cliente.crear_producto("Mouse", 25, 10)
+        
+        # 4. Listar productos
+        productos = cliente.obtener_productos()
+        for p in productos:
+            print(f"🎯 {p['id']}: {p['nombre']} - ${p['precio']}")
